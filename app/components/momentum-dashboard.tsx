@@ -311,7 +311,11 @@ export default function MomentumDashboard() {
           result.ticker,
         );
         if (processed) {
-          updatedEtfs.push({ ...etfInfo, ...processed });
+          updatedEtfs.push({
+            ...etfInfo,
+            ...processed,
+            rsi: processed.rsi ?? undefined, // Convert null to undefined
+          } as ETF);
         } else {
           newErrors.push(`${result.ticker}: Failed to process data`);
           updatedEtfs.push({ ...etfInfo });

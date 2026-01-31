@@ -1,20 +1,9 @@
 import { NextResponse } from "next/server";
 import YahooFinance from "yahoo-finance2";
 
-const yahooFinance = new YahooFinance();
+import { tickers } from "../../data/etfs";
 
-const tickers = [
-  "CSPX.L",
-  "VUSA.L",
-  "VWRL.L",
-  "VUKE.L",
-  "EQQQ.L",
-  "SGLN.L",
-  "VFEM.L",
-  "DAGB.L",
-  "SMGB.L",
-  "IWMO.L",
-];
+const yahooFinance = new YahooFinance();
 
 export async function GET() {
   try {
