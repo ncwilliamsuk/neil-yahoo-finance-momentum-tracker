@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 
-interface ETF {
+export interface ETF {
   ticker: string;
   name: string;
   category: string;
@@ -39,89 +39,10 @@ interface ETF {
   rank?: number;
 }
 
+import { etfData } from "../data/etfs";
+
 export default function MomentumDashboard() {
-  const [etfs, setEtfs] = useState<ETF[]>([
-    {
-      ticker: "CSPX.L",
-      name: "iShares Core S&P 500",
-      category: "US Equities",
-      ter: 0.07,
-      aum: 116000,
-      dividendYield: 0,
-    },
-    {
-      ticker: "VUSA.L",
-      name: "Vanguard S&P 500",
-      category: "US Equities",
-      ter: 0.07,
-      aum: 8500,
-      dividendYield: 1.45,
-    },
-    {
-      ticker: "VWRL.L",
-      name: "Vanguard FTSE All-World",
-      category: "Global Equities",
-      ter: 0.22,
-      aum: 6200,
-      dividendYield: 1.82,
-    },
-    {
-      ticker: "VUKE.L",
-      name: "Vanguard FTSE 100",
-      category: "UK Equities",
-      ter: 0.09,
-      aum: 4200,
-      dividendYield: 3.65,
-    },
-    {
-      ticker: "EQQQ.L",
-      name: "Invesco NASDAQ-100",
-      category: "Technology",
-      ter: 0.3,
-      aum: 7200,
-      dividendYield: 0.45,
-    },
-    {
-      ticker: "SGLN.L",
-      name: "WisdomTree Physical Gold",
-      category: "Precious Metals",
-      ter: 0.39,
-      aum: 13500,
-      dividendYield: 0,
-    },
-    {
-      ticker: "VFEM.L",
-      name: "Vanguard FTSE Emerging Markets",
-      category: "Emerging Markets",
-      ter: 0.22,
-      aum: 5600,
-      dividendYield: 2.85,
-    },
-    {
-      ticker: "DAGB.L",
-      name: "WisdomTree Bitcoin",
-      category: "Crypto",
-      ter: 0.95,
-      aum: 580,
-      dividendYield: 0,
-    },
-    {
-      ticker: "SMGB.L",
-      name: "VanEck Semiconductor",
-      category: "Semiconductors",
-      ter: 0.35,
-      aum: 1800,
-      dividendYield: 0.45,
-    },
-    {
-      ticker: "IWMO.L",
-      name: "iShares MSCI World Momentum",
-      category: "Factor - Momentum",
-      ter: 0.3,
-      aum: 2400,
-      dividendYield: 0.95,
-    },
-  ]);
+  const [etfs, setEtfs] = useState<ETF[]>(etfData);
 
   const [newTicker, setNewTicker] = useState("");
   const [newName, setNewName] = useState("");
@@ -297,8 +218,15 @@ export default function MomentumDashboard() {
       data.etfs.forEach((result: any, index: number) => {
         setProgress({ current: index + 1, total: etfs.length });
 
-        const etfInfo = etfs.find((e) => e.ticker === result.ticker);
-        if (!etfInfo) return;
+        const etfInfo = etfs.find((e) => {
+          console.log("Matching ETF:", e.ticker, "with result:", result.ticker);
+          return e.ticker === result.ticker;
+        });
+
+        if (!etfInfo) {
+          console.log(`No ETF info found for ticker ${result.ticker}`);
+          return;
+        }
 
         if (result.error || !result.historical) {
           newErrors.push(`${result.ticker}: ${result.error || "No data"}`);
@@ -570,6 +498,10 @@ export default function MomentumDashboard() {
       return false;
     return true;
   });
+
+  console.log("Filtered ETFs:", filteredEtfs);
+  console.log("Search Query:", searchQuery);
+  console.log("ETFs:", etfs);
 
   const displayEtfs = [...filteredEtfs].sort((a, b) => {
     if (sortBy === "momentum")

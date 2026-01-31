@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import YahooFinance from "yahoo-finance2";
-
 import { tickers } from "../../data/etfs";
 
 const yahooFinance = new YahooFinance();
@@ -10,21 +9,20 @@ export async function GET() {
     // Fetch VIX data
     let vixData = null;
     try {
-      const vixHistorical = await yahooFinance.historical("^VIX", {
-        period1: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split("T")[0],
-        period2: new Date().toISOString().split("T")[0],
+      const vixChart = await yahooFinance.chart("^VIX", {
+        period1: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+        period2: new Date(),
         interval: "1d",
       });
 
-      if (vixHistorical && vixHistorical.length >= 2) {
-        const latestVix = vixHistorical[vixHistorical.length - 1].close;
-        const prevVix = vixHistorical[vixHistorical.length - 2].close;
-        const vixChange = ((latestVix - prevVix) / prevVix) * 100;
+      if (vixChart?.quotes && vixChart.quotes.length >= 2) {
+        const quotes = vixChart.quotes;
+        const latestVix = quotes[quotes.length - 1].close;
+        const prevVix = quotes[quotes.length - 2].close;
+        const vixChange = ((latestVix! - prevVix!) / prevVix!) * 100;
 
         vixData = {
-          price: latestVix.toFixed(2),
+          price: latestVix!.toFixed(2),
           change: vixChange.toFixed(2),
         };
       }
@@ -38,13 +36,23 @@ export async function GET() {
         try {
           const quote = await yahooFinance.quote(ticker);
 
-          const historical = await yahooFinance.historical(ticker, {
-            period1: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split("T")[0],
-            period2: new Date().toISOString().split("T")[0],
+          // Use chart instead of historical
+          const chartData = await yahooFinance.chart(ticker, {
+            period1: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000),
+            period2: new Date(),
             interval: "1d",
           });
+
+          // Convert chart data to historical format for compatibility
+          const historical = chartData.quotes.map((q) => ({
+            date: q.date,
+            open: q.open,
+            high: q.high,
+            low: q.low,
+            close: q.close,
+            adjClose: q.adjclose || q.close,
+            volume: q.volume,
+          }));
 
           return { ticker, quote, historical, error: null };
         } catch (err: any) {
