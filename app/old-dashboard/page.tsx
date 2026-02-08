@@ -1,13 +1,10 @@
-import Link from 'next/link'
+import MomentumDashboard from "../components/old/momentum-dashboard";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-linear-to-br from-blue-50 to-blue-100 p-4">
       <div className="max-w-7xl mx-auto">
-        Landing page:
-        <Link href="dashboard-v4" className="ml-2 font-bold">
-          Dashboard v4
-        </Link>
+        <MomentumDashboard />
       </div>
     </main>
   );

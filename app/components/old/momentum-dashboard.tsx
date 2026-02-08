@@ -39,7 +39,7 @@ export interface ETF {
   rank?: number;
 }
 
-import { etfData } from "../data/etfs";
+import { etfData } from "../../data/etfs";
 
 export default function MomentumDashboard() {
   const [etfs, setEtfs] = useState<ETF[]>(etfData);
