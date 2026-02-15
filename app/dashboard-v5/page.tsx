@@ -1,6 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import useSWR from 'swr';
+import { CompositeGauge } from '@/app/_components/dashboard/v5/volatility/CompositeGauge';
+import { MetricsTable } from '@/app/_components/dashboard/v5/volatility/MetricsTable';
+import { SP500Chart } from '@/app/_components/dashboard/v5/volatility/SP500Chart';
+import { BreadthIndicator } from '@/app/_components/dashboard/v5/volatility/BreadthIndicator';
 
 export default function DashboardV5Page() {
   const [activeTab, setActiveTab] = useState('volatility');
@@ -71,26 +76,11 @@ export default function DashboardV5Page() {
         </div>
 
         {/* Tab Content */}
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          {activeTab === 'volatility' && (
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900 mb-4">
-                📊 Volatility & Market Health
-              </h2>
-              <p className="text-slate-600">
-                Tab 1 will be implemented in Phase 2. This tab will show:
-              </p>
-              <ul className="mt-4 space-y-2 text-slate-600">
-                <li>• Composite volatility gauge (VIX, VIX3M, VVIX, MOVE, SKEW)</li>
-                <li>• Individual metrics table with editable weights</li>
-                <li>• S&P 500 chart with 20 & 50 DMA</li>
-                <li>• Market breadth (% above 20 DMA)</li>
-              </ul>
-            </div>
-          )}
+        <div>
+          {activeTab === 'volatility' && <VolatilityTab />}
 
           {activeTab === 'macro' && (
-            <div>
+            <div className="bg-white rounded-xl p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-slate-900 mb-4">
                 ⚙️ Macro & Yields
               </h2>
@@ -107,7 +97,7 @@ export default function DashboardV5Page() {
           )}
 
           {activeTab === 'sectorFactor' && (
-            <div>
+            <div className="bg-white rounded-xl p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-slate-900 mb-4">
                 📈 Sector & Factor Analysis
               </h2>
@@ -125,7 +115,7 @@ export default function DashboardV5Page() {
           )}
 
           {activeTab === 'heatmaps' && (
-            <div>
+            <div className="bg-white rounded-xl p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-slate-900 mb-4">
                 🗺️ Heatmaps
               </h2>
@@ -142,7 +132,7 @@ export default function DashboardV5Page() {
           )}
 
           {activeTab === 'screener' && (
-            <div>
+            <div className="bg-white rounded-xl p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-slate-900 mb-4">
                 🔍 Screener
               </h2>
@@ -157,6 +147,79 @@ export default function DashboardV5Page() {
           )}
         </div>
 
+      </div>
+    </div>
+  );
+}
+
+// Volatility Tab Component
+function VolatilityTab() {
+  const fetcher = (url: string) => fetch(url).then(r => r.json());
+  const { data, error, isLoading } = useSWR('/api/v5/volatility-data', fetcher);
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl p-6 shadow-sm">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-slate-600 font-medium">Loading volatility data...</p>
+            <p className="text-sm text-slate-500 mt-2">This may take 2-3 minutes (calculating breadth for 500 stocks)</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-xl p-6 shadow-sm">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-red-900 mb-2">Error Loading Data</h3>
+          <p className="text-red-700">{error.message || 'Failed to fetch volatility data'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  return (
+    <div className="space-y-6">
+      {/* Top Section: Gauge + Metrics Table */}
+      <div className="grid grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <CompositeGauge
+            score={data.composite.score}
+            zone={data.composite.zone}
+            color={data.composite.color}
+            interpretation={data.composite.interpretation}
+          />
+        </div>
+
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <MetricsTable
+            metrics={data.metrics}
+            weights={data.weights}
+          />
+        </div>
+      </div>
+
+      {/* Bottom Section: S&P 500 Chart + Breadth */}
+      <div className="bg-white rounded-xl p-6 shadow-sm">
+        <SP500Chart
+          data={data.sp500.chart}
+          dma20={data.sp500.dma20}
+          dma50={data.sp500.dma50}
+        />
+        
+        <BreadthIndicator
+          percentage={data.breadth.percentage}
+          above={data.breadth.above}
+          total={data.breadth.total}
+          status={data.breadth.status}
+          color={data.breadth.color}
+        />
       </div>
     </div>
   );
