@@ -1111,12 +1111,11 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
                 ticks={getMonthTicks()}
               />
               <YAxis 
-                width={60}
+              width={60}
                 tick={{ fontSize: 12 }} 
                 domain={[0, 100]}
                 ticks={[0, 30, 50, 70, 100]}
               />
-              <YAxis yAxisId="right" orientation="right" width={60} tick={false} axisLine={false} tickLine={false} />
               <Tooltip content={({ active, payload }: any) => {
                 if (active && payload && payload.length) {
                   const data = payload[0].payload;
@@ -1167,11 +1166,10 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
                   ticks={getMonthTicks()}
                 />
                 <YAxis 
-                  width={60}
+                width={60}
                   tick={{ fontSize: 12 }} 
                   domain={['auto', 'auto']}
                 />
-                <YAxis yAxisId="right" orientation="right" width={60} tick={false} axisLine={false} tickLine={false} />
                 <Tooltip content={({ active, payload }: any) => {
                   if (active && payload && payload.length) {
                     const data = payload[0].payload;
@@ -1216,11 +1214,10 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
                   ticks={getMonthTicks()}
                 />
                 <YAxis 
-                  width={60}
+                width={60}
                   tick={{ fontSize: 12 }} 
                   domain={['auto', 'auto']}
                 />
-                <YAxis yAxisId="right" orientation="right" width={60} tick={false} axisLine={false} tickLine={false} />
                 <Tooltip content={({ active, payload }: any) => {
                   if (active && payload && payload.length) {
                     const data = payload[0].payload;
@@ -1265,11 +1262,10 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
                   ticks={getMonthTicks()}
                 />
                 <YAxis 
-                  width={60}
+                width={60}
                   tick={{ fontSize: 12 }} 
                   domain={['auto', 'auto']}
                 />
-                <YAxis yAxisId="right" orientation="right" width={60} tick={false} axisLine={false} tickLine={false} />
                 <Tooltip content={({ active, payload }: any) => {
                   if (active && payload && payload.length) {
                     const data = payload[0].payload;
@@ -1326,11 +1322,10 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
                 ticks={getMonthTicks()}
               />
               <YAxis 
-                width={60}
+              width={60}
                 tick={{ fontSize: 12 }} 
                 domain={['auto', 'auto']}
               />
-              <YAxis yAxisId="right" orientation="right" width={60} tick={false} axisLine={false} tickLine={false} />
               <Tooltip content={({ active, payload }: any) => {
                 if (active && payload && payload.length) {
                   const data = payload[0].payload;
@@ -1418,7 +1413,6 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             domain={['auto', 'auto']}
             tickFormatter={(v: number) => v.toLocaleString()}
           />
-          <YAxis yAxisId="right" orientation="right" width={60} tick={false} axisLine={false} tickLine={false} />
           <Tooltip content={({ active, payload }: any) => {
             if (active && payload && payload.length) {
               const d = payload[0].payload;
