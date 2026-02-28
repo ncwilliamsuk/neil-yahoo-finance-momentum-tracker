@@ -21,7 +21,7 @@ export function DualMomentumCard({ allETFs }: DualMomentumCardProps) {
   // Find top performer for each period
   const periods: ('1M' | '3M' | '6M' | '12M')[] = ['1M', '3M', '6M', '12M'];
   
-  const topPerformers = periods.map(period => {
+  const topPerformers: { period: '1M' | '3M' | '6M' | '12M'; etf: ETFData | null; return: number }[] = periods.map(period => {
     let topETF: ETFData | null = null;
     let topReturn = -Infinity;
 
