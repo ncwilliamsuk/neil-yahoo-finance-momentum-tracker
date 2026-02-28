@@ -187,7 +187,7 @@ export default function WorldMap({ countryReturns, tickerReturns }: Props) {
               maxZoom={6}
             >
               <Geographies geography={GEO_URL}>
-                {({ geographies }) =>
+                {({ geographies }: { geographies: any[] }) =>
                   geographies.map(geo => {
                     const id   = geo.id as string;
                     const data = isoMap[id];
