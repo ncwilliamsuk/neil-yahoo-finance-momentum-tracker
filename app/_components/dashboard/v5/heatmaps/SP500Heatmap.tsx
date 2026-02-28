@@ -29,7 +29,7 @@ interface TooltipState { ticker: string; ret: number; sector: string; nameFull: 
 
 // Lookup map shared across renders — populated during Recharts layout pass
 // Key: "x,y,w,h" won't work since coords vary; we store by ticker
-const cellMap: Map<string, { x: number; y: number; w: number; h: number; ret: number }> = new Map();
+const cellMap: Map<string, { x: number; y: number; w: number; h: number; ret: number; sector: string; nameFull: string }> = new Map();
 const labelMap: Map<string, LabelRect> = new Map();
 
 // Pure static renderer — no closures over component state, so Recharts
