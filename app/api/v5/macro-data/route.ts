@@ -198,7 +198,7 @@ export async function GET(request: Request) {
     YIELD_CURVE_SERIES.forEach(seriesKey => {
       if (seriesKey === 'real_rate') return;
       
-      let dataKey = seriesKey;
+      let dataKey: string = seriesKey;
       if (seriesKey === 'policy_rate') {
         dataKey = region === 'US' ? 'fed_funds' : 'policy_rate';
       }

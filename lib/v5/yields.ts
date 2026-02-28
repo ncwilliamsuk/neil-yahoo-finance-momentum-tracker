@@ -151,7 +151,8 @@ export function createMacroIndicator(
   current: number | null,
   percentile: number,
   statusType: 'u-shaped' | 'linear-high-bad' | 'linear-high-good' | 'spread',
-  spreadValue?: number
+  spreadValue?: number | null,
+  note?: string
 ): MacroIndicator {
   let status: { label: string; color: string };
   let interpretation: string;
@@ -180,7 +181,8 @@ export function createMacroIndicator(
     current,
     percentile,
     status,
-    interpretation
+    interpretation,
+    ...(note ? { note } : {}),
   };
 }
 
@@ -274,13 +276,13 @@ function getSpreadInterpretation(value: number, percentile: number): string {
  */
 export function calculatePercentileFromObservations(
   current: number | null,
-  observations: FREDObservation[]
+  observations: FREDObservation[] | number[]
 ): number {
   if (current === null) return 0;
   
-  const values = observations
-    .map(obs => parseFloat(obs.value))
-    .filter(v => !isNaN(v));
+  const values = (observations as any[])
+    .map((obs: any) => typeof obs === 'number' ? obs : parseFloat(obs.value))
+    .filter((v: number) => !isNaN(v));
   
   if (values.length === 0) return 50;
   
