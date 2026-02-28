@@ -116,7 +116,7 @@ function CDSparkline({ series }: {
             fontSize: '11px',
             padding: '6px 10px',
           }}
-          formatter={(value: number, name: string) => {
+          formatter={(value: number | undefined, name: string) => {
             const labels: Record<string, string> = {
               ratio: 'C/D Ratio',
               ma50:  '50-day MA',
