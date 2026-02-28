@@ -283,7 +283,7 @@ export function getCategoryCounts(universe: 'core' | 'extended' = 'core'): Recor
 }
 
 // Dual momentum comparison tickers — always from core regardless of universe
-export const DUAL_MOMENTUM_TICKERS = ['CSH2.L', 'CSP1.L', 'XMWX.L', 'IGLT.L'] as const;
+export const DUAL_MOMENTUM_TICKERS = ['CSH2.L', 'CSP1.L', 'XMWX.L', 'IGLT.L'];
 
 // Legacy exports for any code still referencing these directly
 export const CORE_ETF_LIST     = getETFList('core');
