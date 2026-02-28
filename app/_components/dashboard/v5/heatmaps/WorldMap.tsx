@@ -182,7 +182,7 @@ export default function WorldMap({ countryReturns, tickerReturns }: Props) {
             <ZoomableGroup
               zoom={position.zoom}
               center={position.coordinates}
-              onMoveEnd={({ zoom, coordinates }) => setPosition({ zoom, coordinates })}
+              onMoveEnd={({ zoom, coordinates }: { zoom: number; coordinates: [number, number] }) => setPosition({ zoom, coordinates })}
               minZoom={1}
               maxZoom={6}
             >
