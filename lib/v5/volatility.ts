@@ -1,3 +1,4 @@
+// lib/v5/volatility
 import { calculatePercentile } from '@/lib/etf/calculations';
 
 export interface HistoricalVolatility {
@@ -21,6 +22,11 @@ export interface VolatilityWeights {
  * Calculate composite volatility score (0-100)
  * Uses percentile ranking + regime adjustments
  */
+export interface CompositeVolatilityResult {
+  score: number;
+  percentiles: { vix: number; vix3m: number; vvix: number; move: number; skew: number };
+}
+
 export function calculateCompositeVolatility(
   vix: number,
   vix3m: number,
@@ -29,7 +35,7 @@ export function calculateCompositeVolatility(
   skew: number,
   weights: VolatilityWeights,
   historicalData: HistoricalVolatility[]
-): number {
+): CompositeVolatilityResult {
   // Extract historical values for each metric
   const vixHistory = historicalData.map(d => d.vix);
   const vix3mHistory = historicalData.map(d => d.vix3m);
@@ -52,18 +58,25 @@ export function calculateCompositeVolatility(
     (movePercentile * weights.move / 100) +
     (skewPercentile * weights.skew / 100);
 
-  // Regime Adjustment 1: VVIX > 110 AND VIX < 20 = Complacent
+  // Regime Adjustment 1: VVIX > 110 AND VIX < 20 = hidden tail risk / complacency
+  // Reduced from +25 to +15 — meaningful but less aggressive
   if (vvix > 110 && vix < 20) {
-    score += 25;
+    score += 15;
   }
 
-  // Regime Adjustment 2: VIX > VIX3M = Immediate fear
-  if (vix > vix3m) {
-    score = Math.max(score, 70);
+  // Regime Adjustment 2: VIX > VIX3M = inverted term structure (immediate fear)
+  // Proportional to degree of inversion, capped at +15 (replaces hard floor of 70)
+  // e.g. 0.5pt inversion -> +1.5pts, 5pt inversion -> +15pts
+  const inversion = vix - vix3m;
+  if (inversion > 0) {
+    score += Math.min(15, inversion * 3);
   }
 
   // Clamp to 0-100
-  return Math.max(0, Math.min(100, score));
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    percentiles: { vix: vixPercentile, vix3m: vix3mPercentile, vvix: vvixPercentile, move: movePercentile, skew: skewPercentile },
+  };
 }
 
 /**

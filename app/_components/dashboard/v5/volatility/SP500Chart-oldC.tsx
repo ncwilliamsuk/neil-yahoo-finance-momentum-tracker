@@ -39,7 +39,7 @@ const TIMEFRAME_BARS: Record<string, number> = {
 
 export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: SP500ChartProps) {
   // Index selection state
-  const [selectedGroup, setSelectedGroup] = useState<'us' | 'intl' | 'commodities' | 'crypto' | 'fx' | 'bonds' | 'vol'>('us');
+  const [selectedGroup, setSelectedGroup] = useState<'us' | 'intl' | 'global' | 'fx' | 'vol'>('us');
   const [selectedIndex, setSelectedIndex] = useState('sp500');
 
   // Timeframe state
@@ -62,248 +62,234 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
 
   const adLineAvailable = !!adLine && adLine.length > 0;
 
-  // Full 12M raw data for the selected index
+  // Slice raw data to selected timeframe
   const rawData = chartDataProp[selectedIndex] || [];
-
-  // Slice to selected timeframe for display
   const bars = TIMEFRAME_BARS[timeframe];
   const data = rawData.slice(-Math.min(bars, rawData.length));
 
-  // 50 DMA needs 50 bars — unavailable on 1M (~23 bars)
+  // Auto-hide 50 DMA on 1M (not enough bars)
   const dma50Available = timeframe !== '1M';
   const effectiveShowDMA50 = showDMA50 && dma50Available;
 
   // Handler for tab changes (auto-selects first index in group)
-  const handleTabChange = (group: 'us' | 'intl' | 'commodities' | 'crypto' | 'fx' | 'bonds' | 'vol') => {
+  const handleTabChange = (group: 'us' | 'intl' | 'global' | 'fx' | 'vol') => {
     setSelectedGroup(group);
-    const firstIndex: Record<string, string> = {
-      us:          'sp500',
-      intl:        'ftse',
-      commodities: 'gold',
-      crypto:      'btc',
-      fx:          'dxy',
-      bonds:       'us10y',
-      vol:         'vix',
-    };
-    setSelectedIndex(firstIndex[group]);
+    const firstIndex = {
+      us: 'sp500',
+      intl: 'ftse',
+      global: 'gold',
+      fx: 'dxy',
+      vol: 'vix'
+    }[group];
+    setSelectedIndex(firstIndex);
   };
 
-  // Calculate DMAs and indicators on FULL rawData so they are warmed up on shorter timeframes.
-  // Then slice the results to match the display window.
-  const fullChartData = rawData.map((point, i) => {
-    // 20 DMA — needs 20 bars of rawData
+  // Calculate DMAs and prepare candlestick data
+  const chartData = data.map((point, i) => {
     let dma20Value = null;
+    let dma50Value = null;
+
     if (i >= 19) {
-      const last20 = rawData.slice(i - 19, i + 1);
+      const last20 = data.slice(i - 19, i + 1);
       dma20Value = last20.reduce((sum, p) => sum + p.close, 0) / 20;
     }
 
-    // 50 DMA — needs 50 bars of rawData
-    let dma50Value = null;
     if (i >= 49) {
-      const last50 = rawData.slice(i - 49, i + 1);
+      const last50 = data.slice(i - 49, i + 1);
       dma50Value = last50.reduce((sum, p) => sum + p.close, 0) / 50;
     }
 
-    // Bollinger Bands (20-period, 2 std dev) on rawData
-    let bollingerUpper  = null;
+    // Bollinger Bands (20-period, 2 std dev)
+    let bollingerUpper = null;
     let bollingerMiddle = null;
-    let bollingerLower  = null;
+    let bollingerLower = null;
     if (i >= 19) {
-      const last20  = rawData.slice(i - 19, i + 1).map(d => d.close);
-      const mean    = last20.reduce((sum, p) => sum + p, 0) / 20;
+      const last20 = data.slice(i - 19, i + 1).map(d => d.close);
+      const mean = last20.reduce((sum, p) => sum + p, 0) / 20;
       const variance = last20.reduce((sum, p) => sum + Math.pow(p - mean, 2), 0) / 20;
-      const stdDev  = Math.sqrt(variance);
+      const stdDev = Math.sqrt(variance);
       bollingerMiddle = mean;
-      bollingerUpper  = mean + 2 * stdDev;
-      bollingerLower  = mean - 2 * stdDev;
+      bollingerUpper = mean + (2 * stdDev);
+      bollingerLower = mean - (2 * stdDev);
     }
 
-    // Donchian Channels (20-period) on rawData
+    // VWAP anchored from lowest low in the slice; fallback to cumulative if low is last bar
+    let vwapValue = null;
+    if (i >= 0) {
+      const lowestLow = Math.min(...data.map(d => d.low));
+      const lowestLowIdx = data.findIndex(d => d.low === lowestLow);
+      const useCumulative = lowestLowIdx >= data.length - 2; // fallback if swing low is at/near end
+      const startIdx = useCumulative ? 0 : lowestLowIdx;
+      if (i >= startIdx) {
+        const sliceData = data.slice(startIdx, i + 1);
+        const cumulativePV = sliceData.reduce((sum, d) => sum + (d.close * d.volume), 0);
+        const cumulativeV  = sliceData.reduce((sum, d) => sum + d.volume, 0);
+        vwapValue = cumulativeV > 0 ? cumulativePV / cumulativeV : null;
+      }
+    }
+
+    // Donchian Channels (20-period)
     let donchianUpper = null;
     let donchianLower = null;
     if (i >= 19) {
-      const last20  = rawData.slice(i - 19, i + 1);
+      const last20 = data.slice(i - 19, i + 1);
       donchianUpper = Math.max(...last20.map(d => d.high));
       donchianLower = Math.min(...last20.map(d => d.low));
     }
 
-    // Candlestick rendering data
-    const isUp        = point.close >= point.open;
-    const candleBody   = Math.abs(point.close - point.open);
+    // Prepare candlestick data
+    const isUp = point.close >= point.open;
+    const candleBody = Math.abs(point.close - point.open);
     const candleBottom = Math.min(point.open, point.close);
-    const candleTop    = Math.max(point.open, point.close);
-    const wickHigh     = point.high - candleTop;
-    const wickLow      = candleBottom - point.low;
+    const candleTop = Math.max(point.open, point.close);
+    
+    // ErrorBar needs the distance from the bar value to high/low
+    const wickHigh = point.high - candleTop;
+    const wickLow = candleBottom - point.low;
 
     return {
-      date:   point.date,
-      open:   point.open,
-      high:   point.high,
-      low:    point.low,
-      close:  point.close,
-      dma20:  dma20Value,
-      dma50:  dma50Value,
+      date: point.date,
+      open: point.open,
+      high: point.high,
+      low: point.low,
+      close: point.close,
+      dma20: dma20Value,
+      dma50: dma50Value,
       volume: point.volume,
+      // New indicators
       bollingerUpper,
       bollingerMiddle,
       bollingerLower,
+      vwap: vwapValue,
       donchianUpper,
       donchianLower,
+      // Candlestick rendering data
       isUp,
       candleBottom,
       candleBody,
-      wickHigh: [wickHigh, wickHigh] as [number, number],
-      wickLow:  [wickLow,  wickLow]  as [number, number],
-      // VWAP and oscillators added below
-      vwap:          null as number | null,
-      rsi:           null as number | null,
-      ppo1:          null as number | null,
-      ppo2:          null as number | null,
-      ppo3:          null as number | null,
-      macd:          null as number | null,
-      macdSignal:    null as number | null,
-      macdHistogram: null as number | null,
+      wickHigh: [wickHigh, wickHigh],
+      wickLow: [wickLow, wickLow]
     };
   });
 
-  // Slice fullChartData to the display window
-  const chartData = fullChartData.slice(-Math.min(bars, fullChartData.length));
-
-  // VWAP — calculated purely on the display slice.
-  // Anchored from the bar with the lowest low in the slice.
-  // Hidden for tickers where volume is zero/unreliable (FX, yields, bonds).
-  const NO_VOLUME_GROUPS: string[] = ['fx', 'bonds'];
-  const vwapAvailable = !NO_VOLUME_GROUPS.includes(selectedGroup);
-
-  if (vwapAvailable) {
-    let lowestLowIdx = 0;
-    let lowestLowVal = Infinity;
-    for (let i = 0; i < chartData.length; i++) {
-      if (chartData[i].low < lowestLowVal) {
-        lowestLowVal = chartData[i].low;
-        lowestLowIdx = i;
-      }
-    }
-    // Fall back to full cumulative if swing low is in the last 2 bars
-    const anchorIdx = lowestLowIdx >= chartData.length - 2 ? 0 : lowestLowIdx;
-
-    let cumPV = 0;
-    let cumV  = 0;
-    for (let i = anchorIdx; i < chartData.length; i++) {
-      cumPV += chartData[i].close * chartData[i].volume;
-      cumV  += chartData[i].volume;
-      chartData[i].vwap = cumV > 0 ? cumPV / cumV : null;
-    }
-  }
-
-  // Calculate RSI (14-period) on full rawData so it is warmed up for all timeframes
+  // Calculate RSI (14-period)
   const calculateRSI = () => {
     const period = 14;
     const rsiData: (number | null)[] = new Array(period).fill(null);
-    if (rawData.length <= period) return rsiData;
-
+    
     let gains = 0;
     let losses = 0;
+    
+    // First RSI calculation
     for (let i = 1; i <= period; i++) {
-      const change = rawData[i].close - rawData[i - 1].close;
+      const change = data[i].close - data[i - 1].close;
       if (change > 0) gains += change;
       else losses += Math.abs(change);
     }
-
+    
     let avgGain = gains / period;
     let avgLoss = losses / period;
-    let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+    let rs = avgGain / avgLoss;
     rsiData.push(100 - (100 / (1 + rs)));
-
-    for (let i = period + 1; i < rawData.length; i++) {
-      const change = rawData[i].close - rawData[i - 1].close;
-      const gain   = change > 0 ? change : 0;
-      const loss   = change < 0 ? Math.abs(change) : 0;
+    
+    // Subsequent RSI values
+    for (let i = period + 1; i < data.length; i++) {
+      const change = data[i].close - data[i - 1].close;
+      const gain = change > 0 ? change : 0;
+      const loss = change < 0 ? Math.abs(change) : 0;
+      
       avgGain = ((avgGain * (period - 1)) + gain) / period;
       avgLoss = ((avgLoss * (period - 1)) + loss) / period;
-      rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+      rs = avgGain / avgLoss;
       rsiData.push(100 - (100 / (1 + rs)));
     }
+    
     return rsiData;
   };
 
-  // Calculate PPO on full rawData
+  // Calculate PPO (Percentage Price Oscillator) - 3 variations
   const calculatePPO = () => {
     const calculateEMA = (period: number) => {
       const multiplier = 2 / (period + 1);
       const ema: (number | null)[] = [];
-      let currentEMA = rawData[0].close;
+      let currentEMA = data[0].close;
       ema.push(currentEMA);
-      for (let i = 1; i < rawData.length; i++) {
-        currentEMA = (rawData[i].close - currentEMA) * multiplier + currentEMA;
+      
+      for (let i = 1; i < data.length; i++) {
+        currentEMA = (data[i].close - currentEMA) * multiplier + currentEMA;
         ema.push(currentEMA);
       }
       return ema;
     };
-
+    
     const calculateSinglePPO = (fast: number, slow: number) => {
       const fastEMA = calculateEMA(fast);
       const slowEMA = calculateEMA(slow);
+      
       return fastEMA.map((fastVal, i) => {
         if (fastVal === null || slowEMA[i] === null || slowEMA[i] === 0) return null;
         return ((fastVal - slowEMA[i]!) / slowEMA[i]!) * 100;
       });
     };
-
+    
     return {
       ppo1: calculateSinglePPO(1, 5),
       ppo2: calculateSinglePPO(5, 13),
-      ppo3: calculateSinglePPO(21, 34),
+      ppo3: calculateSinglePPO(21, 34)
     };
   };
 
-  // Calculate MACD on full rawData
+  // Calculate MACD (Moving Average Convergence Divergence)
   const calculateMACD = () => {
     const calculateEMA = (period: number) => {
       const multiplier = 2 / (period + 1);
       const ema: number[] = [];
-      let currentEMA = rawData[0].close;
+      let currentEMA = data[0].close;
       ema.push(currentEMA);
-      for (let i = 1; i < rawData.length; i++) {
-        currentEMA = (rawData[i].close - currentEMA) * multiplier + currentEMA;
+      
+      for (let i = 1; i < data.length; i++) {
+        currentEMA = (data[i].close - currentEMA) * multiplier + currentEMA;
         ema.push(currentEMA);
       }
       return ema;
     };
-
+    
     const ema12 = calculateEMA(12);
     const ema26 = calculateEMA(26);
+    
+    // MACD line
     const macdLine = ema12.map((val, i) => val - ema26[i]);
-
+    
+    // Signal line (9-day EMA of MACD)
     const multiplier = 2 / (9 + 1);
     const signalLine: number[] = [];
     let currentSignal = macdLine[0];
     signalLine.push(currentSignal);
+    
     for (let i = 1; i < macdLine.length; i++) {
       currentSignal = (macdLine[i] - currentSignal) * multiplier + currentSignal;
       signalLine.push(currentSignal);
     }
-
+    
+    // Histogram
     const histogram = macdLine.map((val, i) => val - signalLine[i]);
+    
     return { macdLine, signalLine, histogram };
   };
-  const rsiData  = showRSI  ? calculateRSI()  : [];
-  const ppoData  = showPPO  ? calculatePPO()  : { ppo1: [], ppo2: [], ppo3: [] };
+
+  const rsiData = showRSI ? calculateRSI() : [];
+  const ppoData = showPPO ? calculatePPO() : { ppo1: [], ppo2: [], ppo3: [] };
   const macdData = showMACD ? calculateMACD() : { macdLine: [], signalLine: [], histogram: [] };
 
-  // Inject oscillators into chartData (which is already sliced to display window).
-  // rawData offset: chartData[0] corresponds to rawData[rawData.length - chartData.length]
-  const rawOffset = rawData.length - chartData.length;
+  // Add RSI, PPO, and MACD to chartData
   chartData.forEach((point, i) => {
-    const ri = rawOffset + i;
-    point.rsi          = rsiData[ri]           ?? null;
-    point.ppo1         = ppoData.ppo1[ri]      ?? null;
-    point.ppo2         = ppoData.ppo2[ri]      ?? null;
-    point.ppo3         = ppoData.ppo3[ri]      ?? null;
-    point.macd         = macdData.macdLine[ri]   ?? null;
-    point.macdSignal   = macdData.signalLine[ri] ?? null;
-    point.macdHistogram= macdData.histogram[ri]  ?? null;
+    point.rsi = rsiData[i] || null;
+    point.ppo1 = ppoData.ppo1[i] || null;
+    point.ppo2 = ppoData.ppo2[i] || null;
+    point.ppo3 = ppoData.ppo3[i] || null;
+    point.macd = macdData.macdLine[i] || null;
+    point.macdSignal = macdData.signalLine[i] || null;
+    point.macdHistogram = macdData.histogram[i] || null;
   });
 
   // Calculate Y-axis domain based on ALL displayed values (prices + DMAs + indicators)
@@ -346,16 +332,23 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
   // Generate ticks — weekly for 1M/3M, monthly for 6M/12M
   const getAxisTicks = () => {
     if (timeframe === '1M' || timeframe === '3M') {
+      // Weekly ticks: pick every ~5th data point
       const ticks: string[] = [];
-      chartData.forEach((d, i) => { if (i % 5 === 0) ticks.push(d.date); });
+      chartData.forEach((d, i) => {
+        if (i % 5 === 0) ticks.push(d.date);
+      });
       return ticks;
     }
+    // Monthly ticks: first occurrence of each calendar month
     const monthTicks: string[] = [];
     const seenMonths = new Set<string>();
     chartData.forEach(d => {
-      const date     = new Date(d.date);
+      const date = new Date(d.date);
       const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
-      if (!seenMonths.has(monthKey)) { seenMonths.add(monthKey); monthTicks.push(d.date); }
+      if (!seenMonths.has(monthKey)) {
+        seenMonths.add(monthKey);
+        monthTicks.push(d.date);
+      }
     });
     return monthTicks;
   };
@@ -499,24 +492,14 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             International
           </button>
           <button
-            onClick={() => handleTabChange('commodities')}
+            onClick={() => handleTabChange('global')}
             className={`px-4 py-2 font-medium transition-colors ${
-              selectedGroup === 'commodities'
+              selectedGroup === 'global'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Commodities
-          </button>
-          <button
-            onClick={() => handleTabChange('crypto')}
-            className={`px-4 py-2 font-medium transition-colors ${
-              selectedGroup === 'crypto'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Crypto
+            Global Assets
           </button>
           <button
             onClick={() => handleTabChange('fx')}
@@ -527,16 +510,6 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             }`}
           >
             Currencies
-          </button>
-          <button
-            onClick={() => handleTabChange('bonds')}
-            className={`px-4 py-2 font-medium transition-colors ${
-              selectedGroup === 'bonds'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Bonds
           </button>
           <button
             onClick={() => handleTabChange('vol')}
@@ -642,95 +615,73 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             </>
           )}
 
-          {selectedGroup === 'commodities' && (
+          {selectedGroup === 'global' && (
             <>
-              {[
-                { key: 'gold',   label: 'Gold' },
-                { key: 'silver', label: 'Silver' },
-                { key: 'copper', label: 'Copper' },
-                { key: 'oil',    label: 'WTI Crude' },
-                { key: 'natgas', label: 'Natural Gas' },
-              ].map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setSelectedIndex(key)}
-                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                    selectedIndex === key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </>
-          )}
-
-          {selectedGroup === 'crypto' && (
-            <>
-              {[
-                { key: 'btc', label: 'Bitcoin' },
-                { key: 'eth', label: 'Ethereum' },
-              ].map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setSelectedIndex(key)}
-                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                    selectedIndex === key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+              <button
+                onClick={() => setSelectedIndex('gold')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  selectedIndex === 'gold'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Gold
+              </button>
+              <button
+                onClick={() => setSelectedIndex('oil')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  selectedIndex === 'oil'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                WTI Crude
+              </button>
+              <button
+                onClick={() => setSelectedIndex('btc')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  selectedIndex === 'btc'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Bitcoin
+              </button>
             </>
           )}
 
           {selectedGroup === 'fx' && (
             <>
-              {[
-                { key: 'dxy',    label: 'US Dollar Index' },
-                { key: 'eurusd', label: 'EUR/USD' },
-                { key: 'gbpusd', label: 'GBP/USD' },
-                { key: 'usdjpy', label: 'USD/JPY' },
-              ].map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setSelectedIndex(key)}
-                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                    selectedIndex === key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </>
-          )}
-
-          {selectedGroup === 'bonds' && (
-            <>
-              {[
-                { key: 'us30y', label: '30Y Yield' },
-                { key: 'us10y', label: '10Y Yield' },
-                { key: 'us5y',  label: '5Y Yield' },
-                { key: 'us3m',  label: '3M T-Bill' },
-                { key: 'tlt',   label: 'TLT (20Y+ ETF)' },
-              ].map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setSelectedIndex(key)}
-                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                    selectedIndex === key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+              <button
+                onClick={() => setSelectedIndex('dxy')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  selectedIndex === 'dxy'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                US Dollar Index
+              </button>
+              <button
+                onClick={() => setSelectedIndex('eurusd')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  selectedIndex === 'eurusd'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                EUR/USD
+              </button>
+              <button
+                onClick={() => setSelectedIndex('usdjpy')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  selectedIndex === 'usdjpy'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                USD/JPY
+              </button>
             </>
           )}
 
@@ -754,10 +705,10 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
         </h3>
       </div>
 
-      {/* Header: legend left, timeframe + chart type toggle right */}
+      {/* Header with timeframe toggle, chart type toggle and inline legend */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
-          {/* Inline legend */}
+          {/* Inline legend with colored indicators */}
           <div className="flex items-center gap-3 text-xs text-slate-600">
             {chartType === 'line' && (
               <div className="flex items-center gap-1">
@@ -789,7 +740,7 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
                 <span>Bollinger</span>
               </div>
             )}
-            {showVWAP && vwapAvailable && (
+            {showVWAP && (
               <div className="flex items-center gap-1">
                 <div className="w-4 h-0.5 bg-black" />
                 <span>VWAP</span>
@@ -810,21 +761,26 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
           </div>
         </div>
         
-        {/* Timeframe + chart type toggles */}
+        {/* Chart type toggle + Timeframe toggle */}
         <div className="flex items-center gap-3">
+          {/* Timeframe buttons */}
           <div className="bg-slate-100 rounded-lg p-1 flex gap-1">
             {(['1M', '3M', '6M', '12M'] as const).map(tf => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                  timeframe === tf ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-200'
+                  timeframe === tf
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 {tf}
               </button>
             ))}
           </div>
+
+          {/* Chart type toggle */}
           <div className="flex gap-2">
           <button
             onClick={() => setChartType('line')}
@@ -860,14 +816,12 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             onChange={(e) => setShowDMA20(e.target.checked)}
             className="w-4 h-4 text-cyan-600 rounded focus:ring-cyan-500"
           />
-          <span className="text-slate-700 cursor-help" title="20-Day Moving Average — the average closing price over the last 20 trading days. Acts as a short-term trend indicator. Price above = bullish near-term; below = bearish.">20 DMA</span>
+          <span className="text-slate-700">20 DMA</span>
           <div className="w-6 h-0.5 bg-cyan-500" style={{ borderTop: '2px dashed' }} />
         </label>
 
-        <label
-          className={`flex items-center gap-2 ${dma50Available ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
-          title={dma50Available ? '' : 'Not enough bars on 1M timeframe'}
-        >
+        <label className={`flex items-center gap-2 ${dma50Available ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
+          title={dma50Available ? '' : 'Not enough data on 1M timeframe'}>
           <input
             type="checkbox"
             checked={showDMA50}
@@ -875,24 +829,19 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             disabled={!dma50Available}
             className="w-4 h-4 text-yellow-600 rounded focus:ring-yellow-500 disabled:opacity-40"
           />
-          <span className="text-slate-700 cursor-help" title="50-Day Moving Average — medium-term trend line. A cross of the 20 DMA above the 50 DMA is a bullish 'golden cross' signal. Price below the 50 DMA often signals a downtrend.">50 DMA</span>
+          <span className="text-slate-700">50 DMA</span>
           {!dma50Available && <span className="text-xs text-slate-400 italic">— 1M only</span>}
           <div className="w-6 h-0.5 bg-yellow-500" style={{ borderTop: '2px dashed' }} />
         </label>
 
-        <label
-          className={`flex items-center gap-2 ${vwapAvailable ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
-          title={vwapAvailable ? '' : 'VWAP not available for FX or bond tickers (no reliable volume)'}
-        >
+        <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={showVWAP}
-            onChange={(e) => vwapAvailable && setShowVWAP(e.target.checked)}
-            disabled={!vwapAvailable}
-            className="w-4 h-4 text-slate-900 rounded focus:ring-slate-700 disabled:opacity-40"
+            onChange={(e) => setShowVWAP(e.target.checked)}
+            className="w-4 h-4 text-slate-900 rounded focus:ring-slate-700"
           />
-          <span className="text-slate-700 cursor-help" title="Volume Weighted Average Price — anchored from the lowest price point in the current timeframe. Represents the average price weighted by volume from that swing low. Price above VWAP = buyers in control since the low; below = sellers.">VWAP</span>
-          {!vwapAvailable && <span className="text-xs text-slate-400 italic">— N/A</span>}
+          <span className="text-slate-700">VWAP</span>
           <div className="w-6 h-0.5 bg-slate-900" style={{ borderTop: '2px solid' }} />
         </label>
 
@@ -918,7 +867,7 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             onChange={(e) => setShowBollinger(e.target.checked)}
             className="w-4 h-4 text-cyan-600 rounded focus:ring-cyan-500"
           />
-          <span className="text-slate-700 cursor-help" title="Bollinger Bands — a 20-period SMA (middle) with upper/lower bands 2 standard deviations away. Price touching the upper band = potentially overbought; lower band = potentially oversold. Bands widening = increasing volatility.">Bollinger Bands</span>
+          <span className="text-slate-700">Bollinger Bands</span>
           <div className="w-6 h-0.5 bg-cyan-400" style={{ borderTop: '2px dotted' }} />
         </label>
 
@@ -929,7 +878,7 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             onChange={(e) => setShowDonchian(e.target.checked)}
             className="w-4 h-4 text-violet-600 rounded focus:ring-violet-500"
           />
-          <span className="text-slate-700 cursor-help" title="Donchian Channels — upper/lower bands showing the highest high and lowest low over the past 20 periods. A breakout above the upper band or below the lower band signals a potential trend continuation.">Donchian</span>
+          <span className="text-slate-700">Donchian</span>
           <div className="w-6 h-0.5 bg-violet-400" style={{ borderTop: '2px solid' }} />
         </label>
 
@@ -944,7 +893,7 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             onChange={(e) => setShowRSI(e.target.checked)}
             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
           />
-          <span className="text-slate-700 cursor-help" title="Relative Strength Index (14-period) — oscillator measuring speed and magnitude of recent price moves. Above 70 = overbought (potential reversal down); below 30 = oversold (potential reversal up); crossing 50 confirms trend direction.">RSI</span>
+          <span className="text-slate-700">RSI</span>
         </label>
 
         <label className="flex items-center gap-2 cursor-pointer">
@@ -954,7 +903,7 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             onChange={(e) => setShowMACD(e.target.checked)}
             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
           />
-          <span className="text-slate-700 cursor-help" title="Moving Average Convergence Divergence (12, 26, 9) — the difference between a 12 and 26-day EMA, with a 9-day signal line. MACD crossing above the signal line = bullish; below = bearish. Histogram shows the gap between the two lines.">MACD</span>
+          <span className="text-slate-700">MACD</span>
         </label>
 
         <label className="flex items-center gap-2 cursor-pointer">
@@ -964,7 +913,7 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             onChange={(e) => setShowPPO(e.target.checked)}
             className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
           />
-          <span className="text-slate-700 cursor-help" title="Percentage Price Oscillator — similar to MACD but expressed as a percentage, making it comparable across different price levels. Shows three timeframes: short (1,5), medium (5,13), and long-term (21,34) momentum simultaneously.">PPO (Multi)</span>
+          <span className="text-slate-700">PPO (Multi)</span>
         </label>
 
         {/* Separator */}
@@ -982,7 +931,7 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
             disabled={!adLineAvailable}
             className="w-4 h-4 text-rose-600 rounded focus:ring-rose-500 disabled:opacity-40"
           />
-          <span className="text-slate-700 cursor-help" title="Advance/Decline Line — cumulative sum of daily advancing minus declining stocks across all 500 S&P 500 constituents. Rising A/D Line with rising price = healthy broad market; A/D Line falling while price rises = narrowing breadth, a warning sign.">A/D Line</span>
+          <span className="text-slate-700">A/D Line</span>
           {!adLineAvailable && (
             <span className="text-xs text-slate-400 italic">— load breadth data first</span>
           )}
@@ -1143,7 +1092,7 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
           )}
 
           {/* VWAP */}
-          {showVWAP && vwapAvailable && (
+          {showVWAP && (
             <Line
               yAxisId="left"
               type="monotone"
@@ -1187,24 +1136,6 @@ export function SP500Chart({ chartData: chartDataProp, indices, spy, adLine }: S
               fill="#94a3b8"
               opacity={0.3}
               name="Volume"
-            />
-          )}
-
-          {/* VIX fear threshold — only shown on VIX chart */}
-          {selectedIndex === 'vix' && (
-            <ReferenceLine
-              yAxisId="left"
-              y={20}
-              stroke="#94a3b8"
-              strokeDasharray="4 4"
-              strokeWidth={1}
-              label={{
-                value: 'Fear threshold',
-                position: 'insideTopRight',
-                fontSize: 11,
-                fill: '#94a3b8',
-                dy: -4,
-              }}
             />
           )}
         </ComposedChart>

@@ -8,8 +8,7 @@ import {
   calculateCompositeVolatility,
   getVolatilityZone,
   getMetricStatus,
-  type HistoricalVolatility,
-  type CompositeVolatilityResult,
+  type HistoricalVolatility
 } from '@/lib/v5/volatility';
 
 export const dynamic    = 'force-dynamic';
@@ -18,38 +17,21 @@ export const fetchCache = 'force-no-store';
 const yahooFinance = new YahooFinance();
 
 const INDICES = {
-  // US Equities
-  sp500:   { ticker: '^GSPC',    name: 'S&P 500' },
-  russell: { ticker: '^RUT',     name: 'Russell 2000' },
-  nasdaq:  { ticker: '^IXIC',    name: 'Nasdaq Composite' },
-  dow:     { ticker: '^DJI',     name: 'Dow Jones' },
-  // International
-  ftse:    { ticker: '^FTSE',    name: 'FTSE 100' },
-  dax:     { ticker: '^GDAXI',   name: 'DAX' },
-  nikkei:  { ticker: '^N225',    name: 'Nikkei 225' },
-  eafe:    { ticker: 'EFA',      name: 'MSCI EAFE' },
-  // Commodities
-  gold:    { ticker: 'GC=F',     name: 'Gold' },
-  oil:     { ticker: 'CL=F',     name: 'WTI Crude' },
-  copper:  { ticker: 'HG=F',     name: 'Copper' },
-  silver:  { ticker: 'SI=F',     name: 'Silver' },
-  natgas:  { ticker: 'NG=F',     name: 'Natural Gas' },
-  // Crypto
-  btc:     { ticker: 'BTC-USD',  name: 'Bitcoin' },
-  eth:     { ticker: 'ETH-USD',  name: 'Ethereum' },
-  // FX
-  dxy:     { ticker: 'DX-Y.NYB', name: 'US Dollar Index' },
-  eurusd:  { ticker: 'EURUSD=X', name: 'EUR/USD' },
-  usdjpy:  { ticker: 'JPY=X',    name: 'USD/JPY' },
-  gbpusd:  { ticker: 'GBPUSD=X', name: 'GBP/USD' },
-  // Volatility
-  vix:     { ticker: '^VIX',     name: 'VIX (Volatility Index)' },
-  // Bonds / Yields
-  us30y:   { ticker: '^TYX',     name: '30Y Treasury Yield' },
-  us10y:   { ticker: '^TNX',     name: '10Y Treasury Yield' },
-  us5y:    { ticker: '^FVX',     name: '5Y Treasury Yield' },
-  us3m:    { ticker: '^IRX',     name: '3M T-Bill Yield' },
-  tlt:     { ticker: 'TLT',      name: '20+ Year Treasury ETF (TLT)' },
+  sp500:  { ticker: '^GSPC',    name: 'S&P 500' },
+  russell:{ ticker: '^RUT',     name: 'Russell 2000' },
+  nasdaq: { ticker: '^IXIC',    name: 'Nasdaq Composite' },
+  dow:    { ticker: '^DJI',     name: 'Dow Jones' },
+  ftse:   { ticker: '^FTSE',    name: 'FTSE 100' },
+  dax:    { ticker: '^GDAXI',   name: 'DAX' },
+  nikkei: { ticker: '^N225',    name: 'Nikkei 225' },
+  eafe:   { ticker: 'EFA',      name: 'MSCI EAFE' },
+  gold:   { ticker: 'GC=F',     name: 'Gold' },
+  oil:    { ticker: 'CL=F',     name: 'WTI Crude' },
+  btc:    { ticker: 'BTC-USD',  name: 'Bitcoin' },
+  dxy:    { ticker: 'DX-Y.NYB', name: 'US Dollar Index' },
+  eurusd: { ticker: 'EURUSD=X', name: 'EUR/USD' },
+  usdjpy: { ticker: 'JPY=X',    name: 'USD/JPY' },
+  vix:    { ticker: '^VIX',     name: 'VIX (Volatility Index)' },
 };
 
 export async function GET() {
@@ -70,11 +52,11 @@ export async function GET() {
       yahooFinance.quote('^SKEW'),
     ]);
 
-    const vix   = vixQuote.regularMarketPrice!;
+    const vix  = vixQuote.regularMarketPrice!;
     const vix3m = vix3mQuote.regularMarketPrice!;
-    const vvix  = vvixQuote.regularMarketPrice!;
-    const move  = moveQuote.regularMarketPrice!;
-    const skew  = skewQuote.regularMarketPrice!;
+    const vvix = vvixQuote.regularMarketPrice!;
+    const move = moveQuote.regularMarketPrice!;
+    const skew = skewQuote.regularMarketPrice!;
 
     // Volatility history
     console.log('Fetching volatility history...');
@@ -96,8 +78,7 @@ export async function GET() {
     }));
 
     const weights = { vix: 35, vix3m: 15, vvix: 20, move: 20, skew: 10 };
-    const compositeResult = calculateCompositeVolatility(vix, vix3m, vvix, move, skew, weights, historicalData);
-    const { score: compositeScore, percentiles } = compositeResult;
+    const compositeScore = calculateCompositeVolatility(vix, vix3m, vvix, move, skew, weights, historicalData);
     const zone = getVolatilityZone(compositeScore);
 
     const metrics = {
@@ -109,7 +90,7 @@ export async function GET() {
     };
 
     // Market indices — batched parallel fetches
-    console.log('Fetching US equity indices...');
+    console.log('Fetching market indices...');
     const [sp500Hist, russellHist, nasdaqHist, dowHist] = await Promise.all([
       yahooFinance.historical(INDICES.sp500.ticker,  { period1: startDate, period2: endDate, interval: '1d' }),
       yahooFinance.historical(INDICES.russell.ticker,{ period1: startDate, period2: endDate, interval: '1d' }),
@@ -117,58 +98,33 @@ export async function GET() {
       yahooFinance.historical(INDICES.dow.ticker,    { period1: startDate, period2: endDate, interval: '1d' }),
     ]);
 
-    console.log('Fetching international indices...');
     const [ftseHist, daxHist, nikkeiHist, eafeHist] = await Promise.all([
-      yahooFinance.historical(INDICES.ftse.ticker,   { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.dax.ticker,    { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.nikkei.ticker, { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.eafe.ticker,   { period1: startDate, period2: endDate, interval: '1d' }),
+      yahooFinance.historical(INDICES.ftse.ticker,  { period1: startDate, period2: endDate, interval: '1d' }),
+      yahooFinance.historical(INDICES.dax.ticker,   { period1: startDate, period2: endDate, interval: '1d' }),
+      yahooFinance.historical(INDICES.nikkei.ticker,{ period1: startDate, period2: endDate, interval: '1d' }),
+      yahooFinance.historical(INDICES.eafe.ticker,  { period1: startDate, period2: endDate, interval: '1d' }),
     ]);
 
-    console.log('Fetching commodities...');
-    const [goldHist, oilHist, copperHist, silverHist, natgasHist] = await Promise.all([
-      yahooFinance.historical(INDICES.gold.ticker,   { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.oil.ticker,    { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.copper.ticker, { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.silver.ticker, { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.natgas.ticker, { period1: startDate, period2: endDate, interval: '1d' }),
+    const [goldHist, oilHist, btcHist] = await Promise.all([
+      yahooFinance.historical(INDICES.gold.ticker, { period1: startDate, period2: endDate, interval: '1d' }),
+      yahooFinance.historical(INDICES.oil.ticker,  { period1: startDate, period2: endDate, interval: '1d' }),
+      yahooFinance.historical(INDICES.btc.ticker,  { period1: startDate, period2: endDate, interval: '1d' }),
     ]);
 
-    console.log('Fetching crypto...');
-    const [btcHist, ethHist] = await Promise.all([
-      yahooFinance.historical(INDICES.btc.ticker, { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.eth.ticker, { period1: startDate, period2: endDate, interval: '1d' }),
-    ]);
-
-    console.log('Fetching FX...');
-    const [dxyHist, eurusdHist, usdjpyHist, gbpusdHist] = await Promise.all([
+    const [dxyHist, eurusdHist, usdjpyHist] = await Promise.all([
       yahooFinance.historical(INDICES.dxy.ticker,   { period1: startDate, period2: endDate, interval: '1d' }),
       yahooFinance.historical(INDICES.eurusd.ticker,{ period1: startDate, period2: endDate, interval: '1d' }),
       yahooFinance.historical(INDICES.usdjpy.ticker,{ period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.gbpusd.ticker,{ period1: startDate, period2: endDate, interval: '1d' }),
     ]);
 
-    console.log('Fetching bonds / yields...');
-    const [us30yHist, us10yHist, us5yHist, us3mHist, tltHist] = await Promise.all([
-      yahooFinance.historical(INDICES.us30y.ticker, { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.us10y.ticker, { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.us5y.ticker,  { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.us3m.ticker,  { period1: startDate, period2: endDate, interval: '1d' }),
-      yahooFinance.historical(INDICES.tlt.ticker,   { period1: startDate, period2: endDate, interval: '1d' }),
-    ]);
-
-    // Convert historical data to chart format
-    // Yield tickers (^TYX, ^TNX etc.) return null open/high/low — fall back to close
-    const toChart = (hist: any[]) => hist
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .map((d: any) => ({
-        date:   d.date.toISOString().split('T')[0],
-        open:   d.open   ?? d.close,
-        high:   d.high   ?? d.close,
-        low:    d.low    ?? d.close,
-        close:  d.adjClose ?? d.close,
-        volume: d.volume || 0,
-      }));
+    const toChart = (hist: any[]) => hist.map(d => ({
+      date:   d.date.toISOString().split('T')[0],
+      open:   d.open,
+      high:   d.high,
+      low:    d.low,
+      close:  d.adjClose ?? d.close,
+      volume: d.volume || 0,
+    }));
 
     const chartData = {
       sp500:   toChart(sp500Hist),
@@ -181,21 +137,11 @@ export async function GET() {
       eafe:    toChart(eafeHist),
       gold:    toChart(goldHist),
       oil:     toChart(oilHist),
-      copper:  toChart(copperHist),
-      silver:  toChart(silverHist),
-      natgas:  toChart(natgasHist),
       btc:     toChart(btcHist),
-      eth:     toChart(ethHist),
       dxy:     toChart(dxyHist),
       eurusd:  toChart(eurusdHist),
       usdjpy:  toChart(usdjpyHist),
-      gbpusd:  toChart(gbpusdHist),
       vix:     toChart(vixHist),
-      us30y:   toChart(us30yHist),
-      us10y:   toChart(us10yHist),
-      us5y:    toChart(us5yHist),
-      us3m:    toChart(us3mHist),
-      tlt:     toChart(tltHist),
     };
 
     // SPY moving averages
@@ -211,13 +157,11 @@ export async function GET() {
     const dma50      = spyPrices.slice(-50).reduce((a: number, b: number)  => a + b, 0) / 50;
     const dma200     = spyPrices.slice(-200).reduce((a: number, b: number) => a + b, 0) / 200;
 
-    console.log('=== Volatility fetch complete ===');
+    console.log('=== Volatility fetch complete (breadth excluded) ===');
 
     return NextResponse.json({
       volatility: { vix: { value: vix }, vix3m: { value: vix3m }, vvix: { value: vvix }, move: { value: move }, skew: { value: skew } },
       composite:  { score: compositeScore, zone: zone.zone, color: zone.color, interpretation: zone.interpretation },
-      percentiles,
-      rawValues:  { vix, vix3m, vvix, move, skew },
       weights,
       metrics,
       indices: INDICES,

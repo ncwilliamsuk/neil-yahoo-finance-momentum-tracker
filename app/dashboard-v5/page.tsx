@@ -1,6 +1,7 @@
+// app/dashboard-v5/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import useSWR from 'swr';
 import { CompositeGauge }    from '@/app/_components/dashboard/v5/volatility/CompositeGauge';
 import { MetricsTable }      from '@/app/_components/dashboard/v5/volatility/MetricsTable';
@@ -18,6 +19,39 @@ const SWR_OPTS = {
 };
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
+
+// Client-side composite score recalculation.
+// Replicates the server logic using pre-computed percentiles + raw values for regime checks.
+function recalculateComposite(
+  percentiles: Record<string, number>,
+  rawValues:   Record<string, number>,
+  weights:     Record<string, number>,
+): { score: number; zone: string; color: string; interpretation: string } {
+  const { vix, vix3m, vvix } = rawValues;
+
+  let score =
+    (percentiles.vix   * weights.vix   / 100) +
+    (percentiles.vix3m * weights.vix3m / 100) +
+    (percentiles.vvix  * weights.vvix  / 100) +
+    (percentiles.move  * weights.move  / 100) +
+    (percentiles.skew  * weights.skew  / 100);
+
+  // Regime Adjustment 1: VVIX > 110 AND VIX < 20 = complacency / hidden tail risk
+  if (vvix > 110 && vix < 20) score += 15;
+
+  // Regime Adjustment 2: Inverted term structure — proportional to degree of inversion
+  const inversion = vix - vix3m;
+  if (inversion > 0) score += Math.min(15, inversion * 3);
+
+  score = Math.max(0, Math.min(100, score));
+
+  // Zone lookup
+  if (score < 20) return { score, zone: 'COMPLACENT', color: '#22c55e', interpretation: 'Extremely low volatility. Markets calm, but complacency can precede sharp moves.' };
+  if (score < 40) return { score, zone: 'NORMAL',     color: '#86efac', interpretation: 'Healthy volatility environment. Normal market conditions.' };
+  if (score < 60) return { score, zone: 'ELEVATED',   color: '#fbbf24', interpretation: 'Rising uncertainty. Monitor for potential stress.' };
+  if (score < 80) return { score, zone: 'HIGH',       color: '#f97316', interpretation: 'Significant volatility. Risk-off environment developing.' };
+  return               { score, zone: 'EXTREME',      color: '#ef4444', interpretation: 'Crisis-level volatility. Extreme fear in markets.' };
+}
 
 export default function DashboardV5Page() {
   const [activeTab, setActiveTab] = useState('screener');
@@ -98,17 +132,36 @@ export default function DashboardV5Page() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Gauge tooltip explaining the scoring methodology
+// ─────────────────────────────────────────────────────────────
+const GAUGE_TOOLTIP = `Composite Volatility Score (0–100)
+
+Inputs & default weights:
+  • VIX (35%)    — 30-day S&P 500 implied vol
+  • VIX3M (15%) — 90-day implied vol
+  • VVIX (20%)  — volatility of VIX itself
+  • MOVE (20%)  — bond market implied vol
+  • SKEW (10%)  — crash protection demand
+
+Scoring method:
+Each metric is percentile-ranked within the past 12 months of data, then combined using the weights above. This means the score reflects how elevated each metric is RELATIVE TO RECENT HISTORY — not absolute levels. A VIX of 18 can score highly if the past year has been mostly below 15.
+
+Regime adjustments:
+  • Inverted term structure (VIX > VIX3M): adds up to +15pts proportional to the degree of inversion — signals acute near-term fear
+  • Hidden tail risk (VVIX > 110 & VIX < 20): adds +15pts — complacency with active hedging underneath
+
+Click any weight % in the table to adjust the scoring.`;
+
+// ─────────────────────────────────────────────────────────────
 // Volatility Tab
-// Fast fetch:  /api/v5/volatility  — fires immediately (~15s)
-// Slow fetch:  /api/v5/breadth-data — fires only on button click (~2 min)
 // ─────────────────────────────────────────────────────────────
 function VolatilityTab() {
   const [breadthEnabled, setBreadthEnabled] = useState(false);
+  // Local weights state for client-side recalculation
+  const [weights, setWeights] = useState<Record<string, number> | null>(null);
 
-  // Fast — fires on mount
   const { data, error, isLoading } = useSWR('/api/v5/volatility-data', fetcher, SWR_OPTS);
 
-  // Slow — fires only when user clicks Load Breadth Data
   const {
     data:      breadthData,
     error:     breadthError,
@@ -119,12 +172,27 @@ function VolatilityTab() {
     { ...SWR_OPTS, revalidateOnMount: true }
   );
 
-  // Derive breadth UI state
   const breadthState: BreadthState =
     !breadthEnabled                      ? 'idle'    :
     breadthLoading                       ? 'loading' :
     breadthError || breadthData?.error   ? 'error'   :
     breadthData                          ? 'loaded'  : 'idle';
+
+  // Initialise local weights from API data on first load
+  const effectiveWeights = weights ?? data?.weights ?? { vix: 35, vix3m: 15, vvix: 20, move: 20, skew: 10 };
+
+  // Recalculate composite score client-side when weights change
+  const composite = useMemo(() => {
+    if (!data?.percentiles || !data?.rawValues) return data?.composite ?? null;
+    const totalWeight = Object.values(effectiveWeights).reduce((a: number, b: number) => a + b, 0);
+    // Only recalculate if weights sum to 100
+    if (totalWeight !== 100) return data?.composite ?? null;
+    return recalculateComposite(data.percentiles, data.rawValues, effectiveWeights);
+  }, [data, effectiveWeights]);
+
+  const handleWeightsChange = (newWeights: Record<string, number>) => {
+    setWeights(newWeights);
+  };
 
   if (isLoading) {
     return (
@@ -159,17 +227,27 @@ function VolatilityTab() {
       {/* Gauge + Metrics */}
       <div className="grid grid-cols-2 gap-6">
         <div className="bg-white rounded-xl p-6 shadow-sm">
+          {/* Gauge title with methodology tooltip */}
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              className="text-xs text-slate-400 cursor-help"
+              title={GAUGE_TOOLTIP}
+            >
+              ⓘ How is this score calculated?
+            </span>
+          </div>
           <CompositeGauge
-            score={data.composite.score}
-            zone={data.composite.zone}
-            color={data.composite.color}
-            interpretation={data.composite.interpretation}
+            score={composite?.score ?? data.composite.score}
+            zone={composite?.zone ?? data.composite.zone}
+            color={composite?.color ?? data.composite.color}
+            interpretation={composite?.interpretation ?? data.composite.interpretation}
           />
         </div>
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <MetricsTable
             metrics={data.metrics}
-            weights={data.weights}
+            weights={effectiveWeights}
+            onWeightsChange={handleWeightsChange}
           />
         </div>
       </div>

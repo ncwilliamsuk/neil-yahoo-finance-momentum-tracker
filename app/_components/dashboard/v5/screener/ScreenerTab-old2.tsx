@@ -18,7 +18,6 @@ import { ScreenerDualMomentumCard }     from './ScreenerDualMomentumCard';
 import { ScreenerLabelHighlightsCard }  from './ScreenerLabelHighlightsCard';
 import { ScreenerTopPerformersCard }    from './ScreenerTopPerformersCard';
 import { ScreenerRotationOverviewCard } from './ScreenerRotationOverviewCard';
-import { ScreenerSignalCard }          from './ScreenerSignalCard';
 
 // ─────────────────────────────────────────────────────────────
 // SWR config — identical pattern to all other V5 tabs
@@ -340,17 +339,6 @@ export function ScreenerTab() {
         onCompareClick={handleCompareClick}
         compareMode={compareMode}
       />
-
-      {/* Signal Card */}
-      {etfsWithScores.length > 0 && (
-        <ScreenerSignalCard
-          etfsWithScores={etfsWithScores}
-          soniaRate={soniaRate}
-          calculationMode={calculationMode}
-          removeLatestMonth={removeLatestMonth}
-          weights={weights}
-        />
-      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-5">
