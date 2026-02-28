@@ -254,12 +254,7 @@ export function RRGScatter({
             {/* Render each position with its trail */}
             {adjustedPositions.map((position) => {
               // Head data
-              const headData = [{
-                rsRatio: position.rsRatio,
-                rsMomentum: position.rsMomentum,
-                ticker: position.ticker,
-                ...position
-              }];
+              const headData = [{ ...position }];
 
               // Trail data - filtered by tailLength
               const trailData = position.trail ? position.trail.slice(0, tailLength) : [];
