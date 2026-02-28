@@ -14,6 +14,7 @@ export interface MacroIndicator {
     color: string;
   };
   interpretation: string;
+  note?: string;
 }
 
 /**
