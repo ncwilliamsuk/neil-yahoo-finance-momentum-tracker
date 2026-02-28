@@ -21,7 +21,7 @@ export function ScreenerDualMomentumCard({ allETFs, soniaRate }: ScreenerDualMom
   // Always uses the full unfiltered universe — compare mode doesn't affect this card
   const dualETFs = allETFs.filter(etf => DUAL_MOMENTUM_TICKERS.includes(etf.ticker));
 
-  const topPerformers = PERIODS.map(period => {
+  const topPerformers: { period: string; etf: ETFData | null; returnValue: number }[] = PERIODS.map(period => {
     let topETF: ETFData | null = null;
     let topReturn = -Infinity;
 
