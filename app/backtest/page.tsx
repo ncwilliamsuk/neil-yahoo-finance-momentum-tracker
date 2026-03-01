@@ -5,7 +5,7 @@
 // Phase 1: Single strategy — equity curve, stats, annual returns, rebalances
 // Phase 2: Parameter sweep — 5×5 heatmap of entry/exit thresholds, coloured by CAGR/Sharpe/Sortino/Calmar
 
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect, RefObject } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer, ReferenceLine,
