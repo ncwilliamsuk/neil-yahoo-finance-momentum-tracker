@@ -611,6 +611,7 @@ function runSweep(
   data:      WeeklyPrices,
   params:    StrategyParams,  // used for weights, holdingsN, rebalance etc — only thresholds vary
   soniaRate: number,
+  metaData:  Record<string, any> = {},
 ): SweepCell[] {
   const results: SweepCell[] = [];
 
@@ -651,6 +652,7 @@ function runPresetSweep(
   data:      WeeklyPrices,
   params:    StrategyParams,
   soniaRate: number,
+  metaData:  Record<string, any> = {},
 ): PresetSweepCell[] {
   const results: PresetSweepCell[] = [];
 
@@ -1752,7 +1754,7 @@ interface InnerProps {
   setResult:              (r: BacktestResult | null) => void;
   setSweepCells:          (c: SweepCell[] | null) => void;
   setFileName:            (f: string) => void;
-  fileRef:                React.RefObject<HTMLInputElement>;
+  fileRef:    RefObject<HTMLInputElement | null>;
   processFile:            (f: File) => void;
   onDrop:                 (e: React.DragEvent) => void;
   // Stress test
