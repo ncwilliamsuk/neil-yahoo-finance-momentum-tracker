@@ -184,7 +184,7 @@ function VolatilityTab() {
   // Recalculate composite score client-side when weights change
   const composite = useMemo(() => {
     if (!data?.percentiles || !data?.rawValues) return data?.composite ?? null;
-    const totalWeight = Object.values(effectiveWeights).reduce((a: number, b: number) => a + b, 0);
+     const totalWeight = (Object.values(effectiveWeights) as number[]).reduce((a: number, b: number) => a + b, 0);
     // Only recalculate if weights sum to 100
     if (totalWeight !== 100) return data?.composite ?? null;
     return recalculateComposite(data.percentiles, data.rawValues, effectiveWeights);
